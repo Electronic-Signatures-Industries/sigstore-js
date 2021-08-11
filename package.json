@@ -1,0 +1,23 @@
+{
+  "name": "sigstore-js",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@types/jsrsasign": "^8.0.13",
+    "axios": "^0.21.1",
+    "elliptic": "^6.5.4",
+    "ethers": "^5.4.4",
+    "jsrsasign": "^10.3.0",
+    "jsrsasign-util": "^1.0.5",
+    "moment": "^2.29.1",
+    "openid-client": "^4.7.4",
+    "rxjs": "^7.3.0",
+    "undersign": "^0.0.0"
+  }
+}
