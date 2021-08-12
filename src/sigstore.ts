@@ -1,7 +1,7 @@
 import { ec } from 'elliptic'
 import 'rxjs'
 import { Client, generators, Issuer } from 'openid-client'
-import { ethers } from 'ethers'
+import { ethers, Wallet } from 'ethers'
 import axios from 'axios'
 
 export class Sigstore {
@@ -49,15 +49,12 @@ export class Sigstore {
    */
   tsaURL = 'https://tsp.pki.gob.pa/tsr'
   kp: any
+  wallet: ethers.Wallet
 
   constructor(private privateKey?: string, private publicKey?: string) {
-    const alg = new ec('secp256k1')
-
-    if (privateKey) {
-      this.kp = alg.keyFromPrivate(privateKey)
-    } else {
-      this.kp = alg.genKeyPair()
-    }
+    this.wallet = ethers.Wallet.createRandom()
+    this.publicKey = this.wallet.publicKey.substring(2)
+    this.privateKey = this.wallet.privateKey.substring(2)
   }
 
   // Issuer {
@@ -105,9 +102,7 @@ export class Sigstore {
   //     'code'
   //   ],
   //   scopes_supported: [
-  //     'openid',
-  //     'email',
-  //     'groups',
+  //     'openid',6666666666666444444444
   //     'profile',
   //     'offline_access'
   //   ],
@@ -124,53 +119,37 @@ export class Sigstore {
 
   async getOIDCToken(email: string): Promise<string> {
     let client: Client
-    try {      
-      const issuer = await Issuer.discover(this.oidcIssuer);
+    try {
+      const r = await axios({
+        method: 'POST',
+        url: this.oidcDeviceCodeURL,
+        data: {
+          client_id: this.oidcClientID,
+          scope: 'openid email',
+        },
+      })
+      const issuer = await Issuer.discover(this.oidcIssuer)
       client = new issuer.Client({
-        redirect_uris: ['http://localhost:3000/#/callback'],
         client_id: this.oidcClientID,
+        client_secret: this.publicKey,
       }) as Client
 
       // device code flow support
-      // TODO: store the code_verifier in your framework's session mechanism, if it is a cookie based solution
-      // it should be httpOnly (not readable by javascript) and encrypted.
-      const code_verifier = generators.codeVerifier()
-      
-      // Create challenge
-      const code_challenge = generators.codeChallenge(code_verifier)
+      const handle = await client.deviceAuthorization()
 
-      const urlChallenge = await client.authorizationUrl({
-        scope: 'openid email profile',
-        code_challenge,
-        code_challenge_method: 'S256',
-      })
-
-      // Must be call by user. Callback 'http://localhost:3000/#/callback'
-      // https://github.com/panva/node-openid-client
-      // const resp = await axios({
-      //   method: 'GET',
-      //   url: urlChallenge,
-      // })
-
-      console.log(resp)
-      debugger
-
-      // String emailFromIDToken = (String) parsedIdToken.getPayload().get("email");
-      // Boolean emailVerified = (Boolean) parsedIdToken.getPayload().get("email_verified");
-      // if (expectedEmailAddress != null && !emailFromIDToken.equals(expectedEmailAddress)) {
-      //     throw new InvalidObjectException(
-      //             String.format("email in ID token '%s' does not match address specified to plugin '%s'",
-      //                     emailFromIDToken, emailAddress));
-      // } else if (Boolean.FALSE.equals(emailVerified)) {
-      //     throw new InvalidObjectException(
-      //             String.format("identity provider '%s' reports email address '%s' has not been verified",
-      //                     parsedIdToken.getPayload().getIssuer(), emailAddress));
-      // }
-      // this.emailAddress = emailFromIDToken;
+      console.log('User Code: ', r)
+      console.log('Verification URI: ', handle.verification_uri)
+      console.log(
+        'Verification URI (complete): ',
+        handle.verification_uri_complete,
+      )
+      const tokenSet = await handle.poll()
+      console.log('received tokens %j', tokenSet)
 
       // return idTokenString;
+      return tokenSet.id_token
     } catch (e) {
-      throw new Error('Error signing email address')
+      throw e
     }
 
     return ''
@@ -190,9 +169,9 @@ export class Sigstore {
         // }
       }
       const digest = ethers.utils.sha256(ethers.utils.toUtf8Bytes(email))
-      const sig = this.kp.sign(digest)
+      const sig = await this.wallet.signMessage(digest)
 
-      return ethers.utils.base64.encode(sig)
+      return ethers.utils.base64.encode(Buffer.from(sig))
     } catch (e) {
       throw e
     }
@@ -202,23 +181,35 @@ export class Sigstore {
     signEmailAddress: string,
     idToken: string,
   ): Promise<string> {
+    console.log({
+      method: 'POST',
+      url: `${this.fulcioInstanceURL}/api/v1/signingCert`,
+      data: {
+        signedEmailAddress: signEmailAddress,
+        publicKey: {
+          algorithm: 'ecdsa',
+          content: ethers.utils.base64.encode(Buffer.from(this.publicKey)),
+        },
+      },
+      headers: {
+        Accept: 'application/pem-certificate-chain',
+
+        Authorization: `Bearer ${idToken}`,
+      },
+    })
     try {
-      const publicKeyB64 = ethers.utils.base64.encode(
-        ethers.utils.toUtf8Bytes(this.kp.getPublic().encode('hex')),
-      )
       const res = await axios({
         method: 'POST',
         url: `${this.fulcioInstanceURL}/api/v1/signingCert`,
         data: {
-          signEmailAddress,
+          signedEmailAddress: signEmailAddress,
           publicKey: {
-            algorithm: 'ecdsa',
-            content: publicKeyB64,
+            //      algorithm: 'ecdsa',
+            content: ethers.utils.base64.encode(Buffer.from(this.publicKey)),
           },
         },
         headers: {
           Accept: 'application/pem-certificate-chain',
-
           Authorization: `Bearer ${idToken}`,
         },
       })
@@ -226,7 +217,7 @@ export class Sigstore {
       // return raw PEM string
       return res.data
     } catch (e) {
-      throw new Error('bad response' + e.message)
+      throw e
     }
   }
 
@@ -240,7 +231,7 @@ export class Sigstore {
     // } catch (e) {
     //   throw new Error(e.message)
     // }
-    return Promise.resolve("");
+    return Promise.resolve('')
   }
 
   async registerRekorLog(signedData: string) {

@@ -10,22 +10,22 @@ const bootstrap = (async () => {
 
     // OIDC Authentication - Frontend
     const idToken = await sigstore.getOIDCToken('molekilla@gmail.com');
-
+console.log(idToken)
     // Signed email
     const signedEmail = await sigstore.signEmailAddress('molekilla@gmail.com');
-
+console.log(signedEmail) //
     // TODO: Requires getOIDCToken authenticated
     const pem = await sigstore.getSigningCertificates(signedEmail, idToken);
 
 
     // Certificate ROOT CA - 20 minutes
-
+console.log(pem);
     // TODO: kaching!
     // Optional
-    const sig = await sigstore.signData(data, pem);
+    // const sig = await sigstore.signData(data, pem);
 
     // Optional
-    await sigstore.registerRekorLog(sig);
+    // await sigstore.registerRekorLog(sig);
 });
 
 bootstrap();
