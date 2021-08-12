@@ -12,6 +12,7 @@
     "@complycloud/asn1-der": "^0.1.3",
     "@types/jsrsasign": "^8.0.13",
     "axios": "^0.21.1",
+    "ecdsa-sig-formatter": "^1.0.11",
     "elliptic": "^6.5.4",
     "ethers": "^5.4.4",
     "jsrsasign": "^10.3.0",

@@ -1,32 +1,30 @@
 import { Sigstore } from './src/sigstore'
 
+const bootstrap = async () => {
+  const sigstore = new Sigstore()
 
+  const data = Buffer.from('Hello World')
 
-const bootstrap = (async () => {
+  // OIDC Authentication - Frontend
+  const tokenset: any = await sigstore.getOIDCToken('molekilla@gmail.com')
+  console.log(tokenset.id_token)
 
-    const sigstore = new Sigstore();
+  // Signed email
+  const signedEmail = await sigstore.signEmailAddress('molekilla@gmail.com')
+  console.log(signedEmail) //
 
-    const data = Buffer.from('Hello World');
+  // TODO: Requires getOIDCToken authenticated
+  const pem = await sigstore.getSigningCertificates(signedEmail, tokenset.id_token)
 
-    // OIDC Authentication - Frontend
-    const idToken = await sigstore.getOIDCToken('molekilla@gmail.com');
-console.log(idToken)
-    // Signed email
-    const signedEmail = await sigstore.signEmailAddress('molekilla@gmail.com');
-console.log(signedEmail) //
-    // TODO: Requires getOIDCToken authenticated
-    const pem = await sigstore.getSigningCertificates(signedEmail, idToken);
+  // Certificate ROOT CA - 20 minutes
+  console.log(pem)
+  // TODO: kaching!
+  // Optional
+  // const sig = await sigstore.signData(data, pem);
 
+  // Optional
+  // await sigstore.registerRekorLog(sig);
+}
 
-    // Certificate ROOT CA - 20 minutes
-console.log(pem);
-    // TODO: kaching!
-    // Optional
-    // const sig = await sigstore.signData(data, pem);
-
-    // Optional
-    // await sigstore.registerRekorLog(sig);
-});
-
-bootstrap();
-debugger;
+bootstrap()
+debugger

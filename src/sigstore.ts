@@ -7,7 +7,7 @@ import { Client, generators, Issuer } from 'openid-client'
 import { ethers, Wallet } from 'ethers'
 import axios from 'axios'
 import { arrayify, hexlify } from 'ethers/lib/utils'
-import { DERSerializer, DERDeserializer } from '@complycloud/asn1-der';
+import { DERSerializer, DERDeserializer } from '@complycloud/asn1-der'
 
 export class Sigstore {
   oidcDeviceCodeFlow = false
@@ -56,9 +56,9 @@ export class Sigstore {
   kp: any
 
   constructor(private privateKey?: Uint8Array, private publicKey?: Uint8Array) {
-    this.kp  =  (new ec('p256')).genKeyPair();
-    this.publicKey = this.kp.getPublic().encode();
-    this.privateKey = this.kp.getPrivate();
+    this.kp = new ec('p256').genKeyPair()
+    this.publicKey = this.kp.getPublic().encode()
+    this.privateKey = this.kp.getPrivate()
   }
 
   // Issuer {
@@ -121,14 +121,13 @@ export class Sigstore {
   //   userinfo_endpoint: 'https://oauth2.sigstore.dev/auth/userinfo'
   // }
 
-  async getOIDCToken(email: string): Promise<string> {
+  async getOIDCToken(email: string): Promise<any> {
     let client: Client
     try {
       const issuer = await Issuer.discover(this.oidcIssuer)
       client = new issuer.Client({
         client_id: this.oidcClientID,
         client_secret: '000',
-        
       }) as Client
 
       // device code flow support
@@ -144,11 +143,10 @@ export class Sigstore {
       console.log('received tokens %j', tokenSet)
 
       // return idTokenString;
-      return tokenSet.id_token
+      return tokenSet
     } catch (e) {
       throw e
     }
-
   }
 
   async signEmailAddress(email: string): Promise<string> {
@@ -167,9 +165,9 @@ export class Sigstore {
       const digest = ethers.utils.sha256(Buffer.from(email))
       const sig = await this.kp.sign(digest)
 
-      const deserializer = new DERDeserializer();
+      const deserializer = new DERDeserializer()
       const asn1 = deserializer(Buffer.from(sig.toDER()))
-console.log(asn1, sig.toDER());
+      console.log(asn1, sig.toDER())
 
       return ethers.utils.base64.encode(Buffer.from(asn1))
     } catch (e) {
@@ -181,8 +179,6 @@ console.log(asn1, sig.toDER());
     signEmailAddress: string,
     idToken: string,
   ): Promise<string> {
-    
-    
     try {
       const res = await fetch(`${this.fulcioInstanceURL}/api/v1/signingCert`, {
         method: 'POST',
@@ -190,12 +186,12 @@ console.log(asn1, sig.toDER());
           signedEmailAddress: signEmailAddress,
           publicKey: {
             //      algorithm: 'ecdsa',
-            content: ethers.utils.base64.encode((this.publicKey)),
+            content: ethers.utils.base64.encode(this.publicKey),
           },
         }),
         headers: {
           'Content-Type': 'application/json',
-          'Accept': 'application/pem-certificate-chain',
+          Accept: 'application/pem-certificate-chain',
           Authorization: `Bearer ${idToken}`,
         },
       })
