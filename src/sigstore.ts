@@ -1,13 +1,13 @@
-const { randomBytes } = require('crypto')
-const secp256r1 = require('secp256r1')
+import jwt_decode from 'jwt-decode'
 import * as fetch from 'node-fetch'
 import { ec } from 'elliptic'
 import 'rxjs'
 import { Client, generators, Issuer } from 'openid-client'
 import { ethers, Wallet } from 'ethers'
 import axios from 'axios'
-import { arrayify, hexlify } from 'ethers/lib/utils'
+import { arrayify, base64, hexlify } from 'ethers/lib/utils'
 import { DERSerializer, DERDeserializer } from '@complycloud/asn1-der'
+import { ArrayBuffertohex, hextob64, hextob64u, utf8tob64u } from 'jsrsasign'
 
 export class Sigstore {
   oidcDeviceCodeFlow = false
@@ -127,11 +127,14 @@ export class Sigstore {
       const issuer = await Issuer.discover(this.oidcIssuer)
       client = new issuer.Client({
         client_id: this.oidcClientID,
-        client_secret: '000',
+        token_endpoint_auth_method: 'none',
       }) as Client
 
       // device code flow support
-      const handle = await client.deviceAuthorization()
+      const handle = await client.deviceAuthorization({
+        scope: 'openid email',
+        client_id: 'sigstore',
+      })
 
       // console.log('User Code: ', r)
       console.log('Verification URI: ', handle.verification_uri)
@@ -149,12 +152,12 @@ export class Sigstore {
     }
   }
 
-  async signEmailAddress(email: string): Promise<string> {
+  async signEmailAddress(jwt: string): Promise<string> {
     try {
       if (this.kp === null) {
         throw new Error('private key must be specified')
       }
-      if (email === null) {
+      if (jwt === null) {
         throw new Error('email address must not be null')
       } else {
         // EmailValidator ev = EmailValidator.getInstance();
@@ -162,14 +165,12 @@ export class Sigstore {
         //     throw new Error(String.format("email address specified '%s' is invalid", emailAddress));
         // }
       }
-      const digest = ethers.utils.sha256(Buffer.from(email))
+      const payload: any = jwt_decode(jwt)
+      console.log(payload)
+      const digest = ethers.utils.sha256(Buffer.from(payload.email))
       const sig = await this.kp.sign(digest)
-
-      const deserializer = new DERDeserializer()
-      const asn1 = deserializer(Buffer.from(sig.toDER()))
-      console.log(asn1, sig.toDER())
-
-      return ethers.utils.base64.encode(Buffer.from(asn1))
+      console.log(sig)
+      return hextob64(sig.toDER('hex'))
     } catch (e) {
       throw e
     }
@@ -185,8 +186,8 @@ export class Sigstore {
         body: JSON.stringify({
           signedEmailAddress: signEmailAddress,
           publicKey: {
-            //      algorithm: 'ecdsa',
-            content: ethers.utils.base64.encode(this.publicKey),
+            // algorithm: 'ecdsa',
+            content: hextob64(this.kp.getPublic().encode('hex')),
           },
         }),
         headers: {

@@ -10,7 +10,7 @@ const bootstrap = async () => {
   console.log(tokenset.id_token)
 
   // Signed email
-  const signedEmail = await sigstore.signEmailAddress('molekilla@gmail.com')
+  const signedEmail = await sigstore.signEmailAddress(tokenset.id_token)
   console.log(signedEmail) //
 
   // TODO: Requires getOIDCToken authenticated
