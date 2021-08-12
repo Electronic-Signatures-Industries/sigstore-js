@@ -1,8 +1,13 @@
+const { randomBytes } = require('crypto')
+const secp256r1 = require('secp256r1')
+import * as fetch from 'node-fetch'
 import { ec } from 'elliptic'
 import 'rxjs'
 import { Client, generators, Issuer } from 'openid-client'
 import { ethers, Wallet } from 'ethers'
 import axios from 'axios'
+import { arrayify, hexlify } from 'ethers/lib/utils'
+import { DERSerializer, DERDeserializer } from '@complycloud/asn1-der';
 
 export class Sigstore {
   oidcDeviceCodeFlow = false
@@ -49,12 +54,11 @@ export class Sigstore {
    */
   tsaURL = 'https://tsp.pki.gob.pa/tsr'
   kp: any
-  wallet: ethers.Wallet
 
-  constructor(private privateKey?: string, private publicKey?: string) {
-    this.wallet = ethers.Wallet.createRandom()
-    this.publicKey = this.wallet.publicKey.substring(2)
-    this.privateKey = this.wallet.privateKey.substring(2)
+  constructor(private privateKey?: Uint8Array, private publicKey?: Uint8Array) {
+    this.kp  =  (new ec('p256')).genKeyPair();
+    this.publicKey = this.kp.getPublic().encode();
+    this.privateKey = this.kp.getPrivate();
   }
 
   // Issuer {
@@ -120,24 +124,17 @@ export class Sigstore {
   async getOIDCToken(email: string): Promise<string> {
     let client: Client
     try {
-      const r = await axios({
-        method: 'POST',
-        url: this.oidcDeviceCodeURL,
-        data: {
-          client_id: this.oidcClientID,
-          scope: 'openid email',
-        },
-      })
       const issuer = await Issuer.discover(this.oidcIssuer)
       client = new issuer.Client({
         client_id: this.oidcClientID,
-        client_secret: this.publicKey,
+        client_secret: '000',
+        
       }) as Client
 
       // device code flow support
       const handle = await client.deviceAuthorization()
 
-      console.log('User Code: ', r)
+      // console.log('User Code: ', r)
       console.log('Verification URI: ', handle.verification_uri)
       console.log(
         'Verification URI (complete): ',
@@ -152,7 +149,6 @@ export class Sigstore {
       throw e
     }
 
-    return ''
   }
 
   async signEmailAddress(email: string): Promise<string> {
@@ -168,10 +164,14 @@ export class Sigstore {
         //     throw new Error(String.format("email address specified '%s' is invalid", emailAddress));
         // }
       }
-      const digest = ethers.utils.sha256(ethers.utils.toUtf8Bytes(email))
-      const sig = await this.wallet.signMessage(digest)
+      const digest = ethers.utils.sha256(Buffer.from(email))
+      const sig = await this.kp.sign(digest)
 
-      return ethers.utils.base64.encode(Buffer.from(sig))
+      const deserializer = new DERDeserializer();
+      const asn1 = deserializer(Buffer.from(sig.toDER()))
+console.log(asn1, sig.toDER());
+
+      return ethers.utils.base64.encode(Buffer.from(asn1))
     } catch (e) {
       throw e
     }
@@ -181,41 +181,27 @@ export class Sigstore {
     signEmailAddress: string,
     idToken: string,
   ): Promise<string> {
-    console.log({
-      method: 'POST',
-      url: `${this.fulcioInstanceURL}/api/v1/signingCert`,
-      data: {
-        signedEmailAddress: signEmailAddress,
-        publicKey: {
-          algorithm: 'ecdsa',
-          content: ethers.utils.base64.encode(Buffer.from(this.publicKey)),
-        },
-      },
-      headers: {
-        Accept: 'application/pem-certificate-chain',
-
-        Authorization: `Bearer ${idToken}`,
-      },
-    })
+    
+    
     try {
-      const res = await axios({
+      const res = await fetch(`${this.fulcioInstanceURL}/api/v1/signingCert`, {
         method: 'POST',
-        url: `${this.fulcioInstanceURL}/api/v1/signingCert`,
-        data: {
+        body: JSON.stringify({
           signedEmailAddress: signEmailAddress,
           publicKey: {
             //      algorithm: 'ecdsa',
-            content: ethers.utils.base64.encode(Buffer.from(this.publicKey)),
+            content: ethers.utils.base64.encode((this.publicKey)),
           },
-        },
+        }),
         headers: {
-          Accept: 'application/pem-certificate-chain',
+          'Content-Type': 'application/json',
+          'Accept': 'application/pem-certificate-chain',
           Authorization: `Bearer ${idToken}`,
         },
       })
 
       // return raw PEM string
-      return res.data
+      return res.json()
     } catch (e) {
       throw e
     }
