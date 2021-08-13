@@ -126,7 +126,7 @@ export class Sigstore {
   //     'code'
   //   ],
   //   scopes_supported: [
-  //     'openid',6666666666666444444444
+  //     'openid',
   //     'profile',
   //     'offline_access'
   //   ],
