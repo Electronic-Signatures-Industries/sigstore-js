@@ -23,6 +23,7 @@
     "openid-client": "^4.7.4",
     "rxjs": "^7.3.0",
     "secp256r1": "^0.0.3",
-    "undersign": "^0.0.0"
+    "undersign": "^0.0.0",
+    "xdv-universal-wallet-core": "^0.6.3"
   }
 }

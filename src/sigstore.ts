@@ -1,13 +1,25 @@
+const fetch = require('node-fetch')
+import { DIDManager } from 'xdv-universal-wallet-core'
+import { RSAKeyGenerator } from 'xdv-universal-wallet-core/lib/did/RSAKeyProvider'
 import jwt_decode from 'jwt-decode'
-import * as fetch from 'node-fetch'
+
 import { ec } from 'elliptic'
 import 'rxjs'
 import { Client, generators, Issuer } from 'openid-client'
 import { ethers, Wallet } from 'ethers'
 import axios from 'axios'
-import { arrayify, base64, hexlify } from 'ethers/lib/utils'
-import { DERSerializer, DERDeserializer } from '@complycloud/asn1-der'
-import { ArrayBuffertohex, hextob64, hextob64u, utf8tob64u } from 'jsrsasign'
+import {
+  ArrayBuffertohex,
+  hextob64,
+  hextob64u,
+  KEYUTIL,
+  KJUR,
+  pemtohex,
+  RSAKey,
+  utf8tob64u,
+  X509,
+} from 'jsrsasign'
+import { base64 } from 'ethers/lib/utils'
 
 export class Sigstore {
   oidcDeviceCodeFlow = false
@@ -54,11 +66,19 @@ export class Sigstore {
    */
   tsaURL = 'https://tsp.pki.gob.pa/tsr'
   kp: any
+  rsa: any
+  publicKey: any
+  sig: KJUR.crypto.Signature
 
-  constructor(private privateKey?: Uint8Array, private publicKey?: Uint8Array) {
-    this.kp = new ec('p256').genKeyPair()
-    this.publicKey = this.kp.getPublic().encode()
-    this.privateKey = this.kp.getPrivate()
+  constructor() {}
+
+  async initialize() {
+    const gen = KEYUTIL.generateKeypair("EC", "secp256r1")
+    this.sig = new KJUR.crypto.Signature({ alg: 'SHA256withRSA' })
+    this.sig.init(gen.prvKeyObj)
+
+    this.kp = KEYUTIL.getKey(gen.prvKeyObj)
+    this.publicKey = hextob64(pemtohex(KEYUTIL.getPEM(gen.pubKeyObj)))
   }
 
   // Issuer {
@@ -143,9 +163,7 @@ export class Sigstore {
         handle.verification_uri_complete,
       )
       const tokenSet = await handle.poll()
-      console.log('received tokens %j', tokenSet)
 
-      // return idTokenString;
       return tokenSet
     } catch (e) {
       throw e
@@ -165,12 +183,16 @@ export class Sigstore {
         //     throw new Error(String.format("email address specified '%s' is invalid", emailAddress));
         // }
       }
+
       const payload: any = jwt_decode(jwt)
       console.log(payload)
-      const digest = ethers.utils.sha256(Buffer.from(payload.email))
-      const sig = await this.kp.sign(digest)
-      console.log(sig)
-      return hextob64(sig.toDER('hex'))
+      // const digest = ethers.utils.sha256(Buffer.from(payload.email))
+
+      this.sig.updateString(payload.email)
+
+      const s = this.sig.sign()
+      
+      return hextob64(s)
     } catch (e) {
       throw e
     }
@@ -186,8 +208,8 @@ export class Sigstore {
         body: JSON.stringify({
           signedEmailAddress: signEmailAddress,
           publicKey: {
-            // algorithm: 'ecdsa',
-            content: hextob64(this.kp.getPublic().encode('hex')),
+            algorithm: 'ecdsa',
+            content: (this.publicKey),
           },
         }),
         headers: {
@@ -198,7 +220,7 @@ export class Sigstore {
       })
 
       // return raw PEM string
-      return res.json()
+      return res.text()
     } catch (e) {
       throw e
     }

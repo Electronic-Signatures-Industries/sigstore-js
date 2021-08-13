@@ -2,6 +2,7 @@ import { Sigstore } from './src/sigstore'
 
 const bootstrap = async () => {
   const sigstore = new Sigstore()
+  await sigstore.initialize();
 
   const data = Buffer.from('Hello World')
 
