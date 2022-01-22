@@ -19,7 +19,7 @@
     "jsrsasign-util": "^1.0.5",
     "jwt-decode": "^3.1.2",
     "moment": "^2.29.1",
-    "node-fetch": "^2.6.1",
+    "node-fetch": "^3.1.1",
     "openid-client": "^4.7.4",
     "rxjs": "^7.3.0",
     "secp256r1": "^0.0.3",
